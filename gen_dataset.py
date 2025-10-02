@@ -35,9 +35,12 @@ def gen_sub() -> Tuple[str, int, str]:
 
 
 def gen_mul() -> Tuple[str, int, str]:
-    a = random.randint(0, MAX)
-    max_b = MAX if a == 0 else MAX // a  # ensure a * b <= 99
-    b = random.randint(0, max_b)
+    # Avoid 0 or 1 for a and b unless forced by MAX
+    min_a = 2 if MAX >= 2 else 1
+    a = random.randint(min_a, MAX)
+    max_b = MAX // a
+    min_b = 2 if max_b >= 2 else 1
+    b = random.randint(min_b, max_b) if max_b >= min_b else min_b
     ans = a * b
     p = f"{a}*{b}=?"
     why = f"{a}*{b} equals {ans}"
@@ -45,9 +48,12 @@ def gen_mul() -> Tuple[str, int, str]:
 
 
 def gen_div() -> Tuple[str, int, str]:
-    # integer division with all numbers <= 99
-    b = random.randint(1, MAX)
-    ans = random.randint(0, MAX // b)  # ensure a = ans * b <= 99
+    # Avoid 1 for b and 0 for ans unless forced by MAX
+    min_b = 2 if MAX >= 2 else 1
+    b = random.randint(min_b, MAX)
+    max_ans = MAX // b
+    min_ans = 1 if max_ans >= 1 else 0
+    ans = random.randint(min_ans, max_ans) if max_ans >= min_ans else min_ans
     a = ans * b
     p = f"{a}/{b}=?"
     why = f"{a}/{b} equals {ans}"
@@ -97,17 +103,92 @@ def build(n_items: int, seed: int) -> list:
     return lines
 
 
+def all_add():
+    for a in range(0, MAX + 1):
+        for b in range(0, MAX + 1 - a):
+            ans = a + b
+            p = f"{a}+{b}=?"
+            why = f"{a}+{b} equals {ans}"
+            yield p, ans, why
+
+
+def all_sub():
+    for a in range(0, MAX + 1):
+        for b in range(0, a + 1):
+            ans = a - b
+            p = f"{a}-{b}=?"
+            why = f"{a}-{b} equals {ans}"
+            yield p, ans, why
+
+
+def all_mul():
+    for a in range(2, MAX + 1):
+        max_b = MAX // a
+        for b in range(2, max_b + 1):
+            ans = a * b
+            p = f"{a}*{b}=?"
+            why = f"{a}*{b} equals {ans}"
+            yield p, ans, why
+
+
+def all_div():
+    for b in range(2, MAX + 1):
+        max_ans = MAX // b
+        for ans in range(1, max_ans + 1):
+            a = ans * b
+            p = f"{a}/{b}=?"
+            why = f"{a}/{b} equals {ans}"
+            yield p, ans, why
+
+
+def all_lin1():
+    for a in range(1, MAX + 1):
+        max_x = MAX // a
+        for x in range(0, max_x + 1):
+            b = a * x
+            p = f"x*{a}={b},x=?"
+            ans = x
+            why = f"{b}/{a} equals {x}"
+            yield p, ans, why
+
+
+ALL_MAP = {
+    "add": all_add,
+    "sub": all_sub,
+    "mul": all_mul,
+    "div": all_div,
+    "lin1": all_lin1,
+}
+
+
+def build_exhaustive(seed: int) -> list:
+    random.seed(seed)
+    lines = []
+    for kind in OPS:
+        for p, ans, why in ALL_MAP[kind]():
+            pos = make_positive(p, ans, why)
+            neg = make_negative(p)
+            lines.append({"negative": neg, "positive": pos})
+    random.shuffle(lines)
+    return lines
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=100000,
+    ap.add_argument("--n", type=int, default=10000,
                     help="number of pairs to generate")
     ap.add_argument("--out", type=str,
                     default="pos_neg_pairs.json", help="output path")
     ap.add_argument("--seed", type=int,
                     default=61273512737, help="random seed")
+    ap.add_argument("--exhaust", action="store_true",
+                    help="generate all possible unique problems")
     args = ap.parse_args()
 
-    lines = build(args.n, args.seed)
+    if args.exhaust:
+        lines = build_exhaustive(args.seed)
+    else:
+        lines = build(args.n, args.seed)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(lines, f, ensure_ascii=False)
     print(f"Wrote {len(lines)} pairs to {args.out}")
